@@ -1,26 +1,29 @@
 import os
-import sys
+import subprocess
 from bs4 import BeautifulSoup
 
 from selenium.webdriver.common.by import By
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
-def fetchHtml(relativeURL, outputDir, filename, maxDepth):
+# fetches the HTML rendered at url and calls itself recursively for every link in the HTML fetched upto a depth of maxDepth
+def fetchHtml(url, outputDir, filename, maxDepth):
     absFilename = os.path.join(outputDir, filename)
-    seleniumRequired = (INITIAL_MAX_DEPTH - maxDepth == 2)
     links, linkTexts = None, None
+
+    # This should be true for panchayat-level directory pages if we started by fetching a district-level directory page,
+    # for example, the page with the list of blocks in Katihar district
+    seleniumRequired = (INITIAL_MAX_DEPTH - maxDepth == 2)
     if seleniumRequired:
         print('Fetching via Selenium ' + absFilename)
-        links, linkTexts = fetchHtmlViaSelenium(relativeURL, absFilename)
+        links, linkTexts = fetchHtmlViaSelenium(url, absFilename)
     else:
         print('Fetching ' + absFilename)
-        stream = os.popen('wget -O ' + '\''+ absFilename + '\'' + " " + rootURL + relativeURL)
-        exitStatus = stream.close()
-        if exitStatus is not None:
-            sys.exit('EXIT STATUS IS NOT NONE')
+        process = subprocess.Popen(['wget', '-O', absFilename, url], stdout = logfile, stderr = logfile)
+        process.communicate()
     
     if maxDepth == 0:
+        # base case: we are at the leaf-level page and do not want to parse links or recurse further
         return
     
     newDirname = os.path.join(outputDir, filename.rsplit('.', 1)[0])
@@ -34,21 +37,28 @@ def fetchHtml(relativeURL, outputDir, filename, maxDepth):
         links, linkTexts = temp[0], temp[1]
     
     for i, link in enumerate(links):
+        if not links[i].startswith('http'):
+            # dealing with a relative URL not an absolute one
+            links[i] = rootURL + links[i]
         fetchHtml(links[i], newDirname, linkTexts[i] + '.html', maxDepth - 1) 
-    
-def fetchHtmlViaSelenium(relativeURL, absFilename):
-    driver.switch_to.new_window('tab')
-    driver.get(rootURL + relativeURL)
+
+# both loads the given url and parses out the links    
+def fetchHtmlViaSelenium(url, absFilename):
+    driver.get(url)
     linkElements = driver.find_elements(By.TAG_NAME, 'a')
     links = []
     linkTexts = []
     for elt in linkElements:
-        links.append(elt.getAttribute('href'))
+        hrefVal = elt.get_attribute('href')
+        links.append(hrefVal)
         linkTexts.append(elt.text)
+        # debug
+        print('Link text', elt.text, 'points to', hrefVal)
     
-    driver.close()
+    # driver.close()
     return (links, linkTexts)
 
+# parses out links from the given html file
 def extractLinks(filename):
     with open(filename) as fp:
         soup = BeautifulSoup(fp, 'html.parser')
@@ -58,60 +68,28 @@ def extractLinks(filename):
     for tag in linkTags:
         links.append(tag['href'])
         linkTexts.append(tag.string)
-        print(tag.string)
+        # debug
+        print('Link text:', tag.string)
 
     return (links, linkTexts)
 
+# program parameters
 rootDir = os.getcwd()
 rootURL = 'https://mahadalitvikasmission.org/VMR/'
-startURL = "BlockWiseDetailsUploaded.do?dt=212" 
-INITIAL_MAX_DEPTH = 3
+districtName = 'Sheohar' # used to name downloaded html file and wget log file
+startURL = "BlockWiseDetailsUploaded.do?dt=205"
+logfilename = districtName + '.log'
+INITIAL_MAX_DEPTH = 4 # 4 is the maximum value if we start by fetching a district-level page, 5 if we are fetching the state-level page
 
 # setup selenium webdriver
-chromeDriverPath = r"C:\Users\madha\chromedriver.exe"
+chromeDriverPath = '/home/madhavan.somanathan/Downloads/chromedriver_linux64/chromedriver' 
 driver = webdriver.Chrome(executable_path = chromeDriverPath)
 
-fetchHtml(startURL, rootDir, 'katihar.html', maxDepth = INITIAL_MAX_DEPTH)
+with open(logfilename, 'w') as logfile:
+    fetchHtml(rootURL + startURL, rootDir, districtName + '.html', maxDepth = INITIAL_MAX_DEPTH)
 
+# close selenium-driven browser window
+driver.quit()
 
-'''
-
-
-for file in os.listdir():
-    split = file.rsplit('.', 1)
-    if split[-1] != 'html':
-        continue
-    temp = extractLinks(file)
-    links, linkTexts = temp[0], temp[1]
-    try:
-        os.mkdir(split[0])
-    except FileExistsError:
-        pass
-    for i, link in enumerate(links):
-        fetchHtml(links[i], split[0], linkTexts[i] + '.html')
-
-
-try:
-    os.mkdir("blocks")
-except FileExistsError:
-    pass
-
-for link in trimmedLinks:
-    fetchHtml(link, "blocks")
-
-stream = os.popen('grep href= katihar.html')
-grepOutput = stream.read()
-links = re.findall('href=".*"', grepOutput)
-trimmedLinks = []
-for link in links:
-    trimmedLinks.append(link[len('href='):].strip('"'))
-
-
-katiharLink = trimmedLinks[15]
-
-stream = os.popen('wget -O ' + os.path.join(rootDir, "katiharDir.html" + " " + rootURL + katiharLink))
-print(stream.read())
-
-'''
-
+# end-of-file
 
