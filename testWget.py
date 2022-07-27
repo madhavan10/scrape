@@ -9,6 +9,15 @@ from selenium.webdriver.chrome.options import Options
 # fetches the HTML rendered at url and calls itself recursively for every link in the HTML fetched upto a depth of maxDepth
 def fetchHtml(url, outputDir, filename, maxDepth):
     absFilename = os.path.join(outputDir, filename)
+    
+    # make sure absFilename doesn't already exist
+    # side-effect: re-running the script will duplicate existing files instead of replacing them if they are not deleted before the re-run
+    duplicate = 1
+    uniqueFilename = absFilename
+    while os.path.exists(uniqueFilename):
+        uniqueFilename = absFilename.rsplit('.', 1)[0] + '(' + str(duplicate) + ')'
+        duplicate += 1
+    absFilename = uniqueFilename
     links, linkTexts = None, None
 
     # This should be true for panchayat-level directory pages if we started by fetching a district-level directory page,
