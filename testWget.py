@@ -15,7 +15,7 @@ def fetchHtml(url, outputDir, filename, maxDepth):
     duplicate = 1
     uniqueFilename = absFilename
     while os.path.exists(uniqueFilename):
-        uniqueFilename = absFilename.rsplit('.', 1)[0] + '(' + str(duplicate) + ')'
+        uniqueFilename = absFilename.rsplit('.', 1)[0] + '(' + str(duplicate) + ')' + '.html'
         duplicate += 1
     absFilename = uniqueFilename
     links, linkTexts = None, None
